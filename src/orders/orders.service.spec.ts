@@ -71,5 +71,38 @@ describe('OrdersService', () => {
             const result = service.cleanOrder(dto);
             expect(result.shippingAddress.addr2).toBe('Suite 100');
         });
+
+        it('should transform "ultra-dirty" input to perfectly "clean" output', () => {
+            const dirtyDto: CreateOrderDto = {
+                externalId: '  EXT-999  ',
+                customerName: '   jane   doe   ',
+                customerEmail: ' JANE@EXAMPLE.COM ',
+                addressLine1: '  456   dirty   ave  ',
+                city: '  dirty   city  ',
+                state: '  ca  ',
+                zipCode: '  90210  ',
+                country: '  vEnEzUeLa  ',
+                source: '  mAnUaL_eNtRy  ',
+                items: [
+                    {
+                        sku: '  dirty-sku-1  ',
+                        quantity: 5,
+                        unitPrice: 99.99,
+                    },
+                ],
+            };
+
+            const result = service.cleanOrder(dirtyDto);
+
+            expect(result.externalId).toBe('EXT-999');
+            expect(result.entity).toBe('jane   doe');
+            expect(result.shippingAddress.addr1).toBe('456   dirty   ave');
+            expect(result.shippingAddress.state).toBe('CA');
+            expect(result.shippingAddress.country).toBe('VENEZUELA');
+            expect(result.source).toBe('mAnUaL_eNtRy');
+            expect(result.items[0].itemId).toBe('dirty-sku-1');
+            expect(result.items[0].description).toBe('SKU: dirty-sku-1');
+            expect(result.status).toBe('pending_sync');
+        });
     });
 });
