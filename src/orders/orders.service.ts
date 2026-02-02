@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, retry, timer, defer } from 'rxjs';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { NetSuiteOrder, NetSuiteOrderItem } from './interfaces/netsuite-order.interface';
 
@@ -42,12 +42,21 @@ export class OrdersService {
 
         try {
             const response = await firstValueFrom(
-                this.httpService.post(url, order),
+                defer(() => this.httpService.post(url, order)).pipe(
+                    retry({
+                        count: 2,
+                        delay: (error, retryCount) => {
+                            this.logger.warn(`Retry attempt ${retryCount} for order ${order.externalId} due to: ${error.message}`);
+                            const delayTime = process.env.NODE_ENV === 'test' ? 10 : retryCount * 1000;
+                            return timer(delayTime);
+                        }
+                    })
+                ),
             );
             return response.data;
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            this.logger.error(`Error sending order to NetSuite: ${errorMessage}`);
+            this.logger.error(`Failed to send order to NetSuite after retries: ${errorMessage}`);
             throw error;
         }
     }
