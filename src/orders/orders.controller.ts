@@ -7,7 +7,8 @@ export class OrdersController {
     constructor(private readonly ordersService: OrdersService) { }
 
     @Post()
-    create(@Body() createOrderDto: CreateOrderDto) {
-        return this.ordersService.cleanOrder(createOrderDto);
+    async create(@Body() createOrderDto: CreateOrderDto) {
+        const cleanedOrder = this.ordersService.cleanOrder(createOrderDto);
+        return await this.ordersService.sendToNetSuite(cleanedOrder);
     }
 }

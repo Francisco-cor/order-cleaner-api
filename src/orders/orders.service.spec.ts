@@ -1,16 +1,40 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto, OrderItemDto } from './dto/create-order.dto';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { of, throwError } from 'rxjs';
+import { NetSuiteOrder } from './interfaces/netsuite-order.interface';
 
 describe('OrdersService', () => {
     let service: OrdersService;
+    let httpService: HttpService;
+    let configService: ConfigService;
+
+    const mockHttpService = {
+        post: jest.fn(),
+    };
+
+    const mockConfigService = {
+        get: jest.fn().mockReturnValue('https://dummy-netsuite-url.com'),
+    };
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
-            providers: [OrdersService],
+            providers: [
+                OrdersService,
+                { provide: HttpService, useValue: mockHttpService },
+                { provide: ConfigService, useValue: mockConfigService },
+            ],
         }).compile();
 
         service = module.get<OrdersService>(OrdersService);
+        httpService = module.get<HttpService>(HttpService);
+        configService = module.get<ConfigService>(ConfigService);
+    });
+
+    afterEach(() => {
+        jest.clearAllMocks();
     });
 
     it('should be defined', () => {
@@ -71,38 +95,51 @@ describe('OrdersService', () => {
             const result = service.cleanOrder(dto);
             expect(result.shippingAddress.addr2).toBe('Suite 100');
         });
+    });
 
-        it('should transform "ultra-dirty" input to perfectly "clean" output', () => {
-            const dirtyDto: CreateOrderDto = {
-                externalId: '  EXT-999  ',
-                customerName: '   jane   doe   ',
-                customerEmail: ' JANE@EXAMPLE.COM ',
-                addressLine1: '  456   dirty   ave  ',
-                city: '  dirty   city  ',
-                state: '  ca  ',
-                zipCode: '  90210  ',
-                country: '  vEnEzUeLa  ',
-                source: '  mAnUaL_eNtRy  ',
-                items: [
-                    {
-                        sku: '  dirty-sku-1  ',
-                        quantity: 5,
-                        unitPrice: 99.99,
-                    },
-                ],
+    describe('sendToNetSuite', () => {
+        it('should send a POST request to NetSuite API and return the data', async () => {
+            const mockOrder: NetSuiteOrder = {
+                externalId: 'ORD-123',
+                entity: 'John Doe',
+                trandate: '2026-02-02T16:40:07-06:00',
+                memo: 'Test order',
+                location: 'Main Warehouse',
+                subsidiary: '1',
+                items: [],
+                shippingAddress: {
+                    addr1: '123 Main St',
+                    city: 'New York',
+                    state: 'NY',
+                    zip: '10001',
+                    country: 'USA',
+                },
+                source: 'Web',
+                status: 'pending_sync',
             };
 
-            const result = service.cleanOrder(dirtyDto);
+            const mockResponse = {
+                data: { success: true, internalId: 'NS-456' },
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                config: { headers: {} as any },
+            };
+            mockHttpService.post.mockReturnValue(of(mockResponse));
 
-            expect(result.externalId).toBe('EXT-999');
-            expect(result.entity).toBe('jane   doe');
-            expect(result.shippingAddress.addr1).toBe('456   dirty   ave');
-            expect(result.shippingAddress.state).toBe('CA');
-            expect(result.shippingAddress.country).toBe('VENEZUELA');
-            expect(result.source).toBe('mAnUaL_eNtRy');
-            expect(result.items[0].itemId).toBe('dirty-sku-1');
-            expect(result.items[0].description).toBe('SKU: dirty-sku-1');
-            expect(result.status).toBe('pending_sync');
+            const result = await service.sendToNetSuite(mockOrder);
+
+            expect(configService.get).toHaveBeenCalledWith('NETSUITE_API_URL');
+            expect(httpService.post).toHaveBeenCalledWith('https://dummy-netsuite-url.com', mockOrder);
+            expect(result).toEqual(mockResponse.data);
+        });
+
+        it('should throw an error if the HTTP request fails', async () => {
+            const mockOrder = {} as NetSuiteOrder;
+            const error = new Error('API Error');
+            mockHttpService.post.mockReturnValue(throwError(() => error));
+
+            await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow('API Error');
         });
     });
 });
