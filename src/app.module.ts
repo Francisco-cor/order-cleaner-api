@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { OrdersModule } from './orders/orders.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -11,6 +12,7 @@ import * as Joi from 'joi';
         PORT: Joi.number().default(3000),
       }),
     }),
+    OrdersModule,
   ],
   controllers: [],
   providers: [],
