@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadGatewayException, Inject } from '@nestjs/common';
+import { Injectable, Logger, BadGatewayException, Inject, ConflictException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, retry, timer, defer } from 'rxjs';
@@ -43,7 +43,7 @@ export class OrdersService {
         const isDuplicate = await this.orderRepository.exists(order.externalId);
         if (isDuplicate) {
             this.logger.warn(`Order ${order.externalId} has already been synced to NetSuite. Skipping.`);
-            return { skipped: true, externalId: order.externalId };
+            throw new ConflictException(`Order ${order.externalId} has already been synced`);
         }
 
         const url = this.configService.get<string>('NETSUITE_API_URL') || '';

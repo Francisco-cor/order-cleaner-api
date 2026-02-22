@@ -5,7 +5,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
 import { NetSuiteOrder } from './interfaces/netsuite-order.interface';
-import { BadGatewayException } from '@nestjs/common';
+import { BadGatewayException, ConflictException } from '@nestjs/common';
 import { ORDER_REPOSITORY_TOKEN } from './ports/order-repository.interface';
 
 describe('OrdersService', () => {
@@ -169,14 +169,14 @@ describe('OrdersService', () => {
             await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow('NetSuite internal server error');
         });
 
-        it('should skip syncing if the order has already been synced', async () => {
+        it('should throw ConflictException if the order has already been synced', async () => {
             mockOrderRepository.exists.mockResolvedValue(true);
 
-            const result = await service.sendToNetSuite(mockOrder);
+            await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow(ConflictException);
+            await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow(`Order ${mockOrder.externalId} has already been synced`);
 
             expect(mockOrderRepository.exists).toHaveBeenCalledWith(mockOrder.externalId);
             expect(mockHttpService.post).not.toHaveBeenCalled();
-            expect(result).toEqual({ skipped: true, externalId: mockOrder.externalId });
         });
 
         it('should save the order ID after a successful sync', async () => {
