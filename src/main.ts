@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JsonLogger } from './common/logger/json-logger.service';
@@ -10,6 +11,10 @@ async function bootstrap(): Promise<void> {
     bufferLogs: true,
   });
   app.useLogger(new JsonLogger());
+
+  // Security
+  app.use(helmet());
+  app.enableCors();
 
   // Swagger Configuration
   const config = new DocumentBuilder()
