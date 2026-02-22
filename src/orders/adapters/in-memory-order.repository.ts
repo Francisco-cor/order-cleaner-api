@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { OrderRepository } from '../ports/order-repository.interface';
 
 @Injectable()
-export class MemoryOrderRepository implements OrderRepository {
+export class InMemoryOrderRepository implements OrderRepository {
     private readonly syncedOrders = new Set<string>();
 
     async exists(id: string): Promise<boolean> {
