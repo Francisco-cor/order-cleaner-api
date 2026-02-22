@@ -6,11 +6,13 @@ import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
 import { NetSuiteOrder } from './interfaces/netsuite-order.interface';
 import { BadGatewayException } from '@nestjs/common';
+import { ORDER_REPOSITORY_TOKEN } from './ports/order-repository.interface';
 
 describe('OrdersService', () => {
     let service: OrdersService;
     let httpService: jest.Mocked<HttpService>;
     let configService: jest.Mocked<ConfigService>;
+    let orderRepository: any;
 
     const mockHttpService = {
         post: jest.fn(),
@@ -20,18 +22,25 @@ describe('OrdersService', () => {
         get: jest.fn().mockReturnValue('https://dummy-netsuite-url.com'),
     };
 
+    const mockOrderRepository = {
+        exists: jest.fn(),
+        save: jest.fn(),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 OrdersService,
                 { provide: HttpService, useValue: mockHttpService },
                 { provide: ConfigService, useValue: mockConfigService },
+                { provide: ORDER_REPOSITORY_TOKEN, useValue: mockOrderRepository },
             ],
         }).compile();
 
         service = module.get<OrdersService>(OrdersService);
         httpService = module.get(HttpService);
         configService = module.get(ConfigService);
+        orderRepository = module.get(ORDER_REPOSITORY_TOKEN);
 
         // Ensure NODE_ENV is test for the service logic
         process.env.NODE_ENV = 'test';
@@ -40,6 +49,8 @@ describe('OrdersService', () => {
     afterEach(() => {
         jest.clearAllMocks();
         mockHttpService.post.mockReset(); // Crucial to clear mockReturnValueOnce
+        mockOrderRepository.exists.mockReset();
+        mockOrderRepository.save.mockReset();
     });
 
     it('should be defined', () => {
@@ -156,6 +167,36 @@ describe('OrdersService', () => {
 
             await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow(BadGatewayException);
             await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow('NetSuite internal server error');
+        });
+
+        it('should skip syncing if the order has already been synced', async () => {
+            mockOrderRepository.exists.mockResolvedValue(true);
+
+            const result = await service.sendToNetSuite(mockOrder);
+
+            expect(mockOrderRepository.exists).toHaveBeenCalledWith(mockOrder.externalId);
+            expect(mockHttpService.post).not.toHaveBeenCalled();
+            expect(result).toEqual({ skipped: true, externalId: mockOrder.externalId });
+        });
+
+        it('should save the order ID after a successful sync', async () => {
+            mockOrderRepository.exists.mockResolvedValue(false);
+            mockHttpService.post.mockReturnValue(of(mockResponse));
+
+            await service.sendToNetSuite(mockOrder);
+
+            expect(mockOrderRepository.exists).toHaveBeenCalledWith(mockOrder.externalId);
+            expect(mockHttpService.post).toHaveBeenCalled();
+            expect(mockOrderRepository.save).toHaveBeenCalledWith(mockOrder.externalId);
+        });
+
+        it('should NOT save the order ID if the sync fails', async () => {
+            mockOrderRepository.exists.mockResolvedValue(false);
+            const error = new Error('Persistent Failure');
+            mockHttpService.post.mockReturnValue(throwError(() => error));
+
+            await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow('Persistent Failure');
+            expect(mockOrderRepository.save).not.toHaveBeenCalled();
         });
     });
 });

@@ -1,9 +1,10 @@
-import { Injectable, Logger, BadGatewayException } from '@nestjs/common';
+import { Injectable, Logger, BadGatewayException, Inject } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, retry, timer, defer } from 'rxjs';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { NetSuiteOrder, NetSuiteOrderItem } from './interfaces/netsuite-order.interface';
+import { OrderRepository, ORDER_REPOSITORY_TOKEN } from './ports/order-repository.interface';
 
 @Injectable()
 export class OrdersService {
@@ -12,6 +13,8 @@ export class OrdersService {
     constructor(
         private readonly httpService: HttpService,
         private readonly configService: ConfigService,
+        @Inject(ORDER_REPOSITORY_TOKEN)
+        private readonly orderRepository: OrderRepository,
     ) { }
 
     cleanOrder(orderData: CreateOrderDto): NetSuiteOrder {
@@ -37,6 +40,12 @@ export class OrdersService {
     }
 
     async sendToNetSuite(order: NetSuiteOrder): Promise<any> {
+        const isDuplicate = await this.orderRepository.exists(order.externalId);
+        if (isDuplicate) {
+            this.logger.warn(`Order ${order.externalId} has already been synced to NetSuite. Skipping.`);
+            return { skipped: true, externalId: order.externalId };
+        }
+
         const url = this.configService.get<string>('NETSUITE_API_URL') || '';
         this.logger.log(`Sending order ${order.externalId} to NetSuite at ${url}`);
 
@@ -53,6 +62,8 @@ export class OrdersService {
                     })
                 ),
             );
+
+            await this.orderRepository.save(order.externalId);
             return response.data;
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
