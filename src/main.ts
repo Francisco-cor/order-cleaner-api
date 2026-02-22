@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JsonLogger } from './common/logger/json-logger.service';
@@ -9,6 +10,17 @@ async function bootstrap(): Promise<void> {
     bufferLogs: true,
   });
   app.useLogger(new JsonLogger());
+
+  // Swagger Configuration
+  const config = new DocumentBuilder()
+    .setTitle('Order Cleaner API')
+    .setDescription('The Order Cleaner API for NetSuite synchronization')
+    .setVersion('1.0')
+    .addTag('orders')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
