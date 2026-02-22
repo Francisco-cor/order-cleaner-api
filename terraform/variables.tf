@@ -20,3 +20,8 @@ variable "app_name" {
   type        = string
   default     = "order-cleaner-api"
 }
+
+variable "container_image" {
+  description = "The Docker image for the application"
+  type        = string
+}
