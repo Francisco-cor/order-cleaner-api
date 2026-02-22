@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadGatewayException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, retry, timer, defer } from 'rxjs';
@@ -57,6 +57,15 @@ export class OrdersService {
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.logger.error(`Failed to send order to NetSuite after retries: ${errorMessage}`);
+
+            if (error.response) {
+                // The request was made and the server responded with a status code
+                // that falls out of the range of 2xx
+                if (error.response.status === 500) {
+                    throw new BadGatewayException('NetSuite internal server error');
+                }
+            }
+
             throw error;
         }
     }

@@ -5,6 +5,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
 import { NetSuiteOrder } from './interfaces/netsuite-order.interface';
+import { BadGatewayException } from '@nestjs/common';
 
 describe('OrdersService', () => {
     let service: OrdersService;
@@ -141,6 +142,20 @@ describe('OrdersService', () => {
 
             await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow('Persistent Failure');
             expect(httpService.post).toHaveBeenCalledTimes(3);
+        });
+
+        it('should throw BadGatewayException if NetSuite returns 500', async () => {
+            const error = {
+                message: 'Internal Server Error',
+                response: {
+                    status: 500,
+                    data: { message: 'NetSuite error' },
+                },
+            };
+            mockHttpService.post.mockReturnValue(throwError(() => error));
+
+            await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow(BadGatewayException);
+            await expect(service.sendToNetSuite(mockOrder)).rejects.toThrow('NetSuite internal server error');
         });
     });
 });
