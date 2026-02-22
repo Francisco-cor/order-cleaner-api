@@ -2,6 +2,7 @@ import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { OrdersModule } from './orders/orders.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
+import { HealthModule } from './health/health.module';
 import * as Joi from 'joi';
 
 @Module({
@@ -14,6 +15,7 @@ import * as Joi from 'joi';
       }),
     }),
     OrdersModule,
+    HealthModule,
   ],
   controllers: [],
   providers: [],
